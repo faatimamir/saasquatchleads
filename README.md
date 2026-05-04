@@ -1,25 +1,91 @@
 # SaaSQuatch Leads — AI-Powered B2B Lead Generation
 
-A full-stack lead generation tool built for the Caprae Capital interview challenge. Enhances the SaaSQuatch Leads concept with **AI lead scoring** and **AI email generation** powered by Claude.
+A full-stack B2B lead generation and pipeline management tool built for the Caprae Capital interview challenge. Finds real local businesses, enriches them with contact data, scores them with AI, and manages them through a full sales pipeline — using **100% free APIs**.
+
+## Live Demo
+
+[saasquatchleads.vercel.app](https://saasquatchleads.vercel.app)
+
+---
 
 ## Features
 
-- **Lead Discovery** — Search businesses by industry + location via Google Places API
-- **AI Lead Scoring** — Claude scores each lead 1–10 with fit level (High/Medium/Low), reasoning, and talking points
-- **AI Email Generator** — Claude writes personalized cold outreach emails per lead
-- **Lead Dashboard** — Save, filter, and manage leads with persistent SQLite storage
-- **CSV Export** — Download leads (with AI scores) as CSV
+### Lead Discovery
+- Search businesses by industry + location using **OpenStreetMap Overpass API** (free, no key required)
+- 30+ supported business types (restaurants, dental offices, gyms, law firms, and more)
+- Geocoding via **Nominatim** — converts city names to bounding boxes automatically
+- Deduplicates results by name before display
+
+### AI Lead Scoring
+- **Groq API** with **Llama 3.3 70B** (free tier: 14,400 req/day) scores each lead 1–10
+- Returns fit level (High / Medium / Low), reasoning, and 3 conversation talking points
+- **Quality Score** (0–100) calculated from data completeness: phone, website, email, ratings
+- **Lead Tier** classification:  Hot / Warm / Cold
+- **Score All** — bulk score every visible lead in one click
+- Supports custom **ICP (Ideal Customer Profile)** criteria to tailor scores
+- 4 quick ICP templates: SMB Service, Professional Services, Healthcare, Home Services
+
+### Email Enrichment
+- **Enrich** button fetches the lead's website and contact pages
+- Extracts real email addresses using regex + smart filtering (skips platform/hosting emails like wixpress, squarespace)
+- Always checks `/contact`, `/contact-us`, `/about` pages — not just the homepage
+- Ranks emails by domain match and contact prefix priority (contact@ > info@ > hello@)
+- **Enrich All** — bulk enrich every lead with a website in one click
+
+### Lead Pipeline Management
+- 5-stage pipeline: **New → Contacted → Qualified → Closed → Not Interested**
+- Inline status dropdown on each lead card
+- Per-lead notes with inline editing
+- Contact count tracking and last-contacted timestamps
+- Duplicate detection using Levenshtein distance similarity (website 40pts, phone 40pts, name 20pts)
+
+### Dashboard & Views
+- **List view** — full lead cards with all actions
+- **Kanban board** — visual pipeline columns, hover cards to quick-move between stages
+- Pipeline overview cards — click any stage to filter instantly
+- Summary stats: Total Saved, AI Scored, Avg AI Score
+- **InsightsCard** — pipeline overview, Hot/Warm/Cold segmentation with progress bars, top industries, AI recommendations
+
+### Filters
+Dashboard-level:
+- Text search (company, industry, location)
+- Industry dropdown (auto-populated from your leads)
+- Lead tier (Hot / Warm / Cold)
+- Has Email toggle
+
+LeadsTable toolbar:
+- Has Phone / Has Website toggles
+- Minimum AI score (≥7, ≥8, ≥9)
+- Lead tier
+- Sort by: Name, Rating, AI Score
+
+### Import & Export
+- **CSV Import** — upload any CSV; auto-maps common column names (`company_name`, `company`, `phone`, `website`, `industry`, etc.)
+- **CSV Export** — standard format with all fields including AI scores
+- **CRM Export** — click-based dropdown with 3 formats:
+  - **Salesforce** — uses custom field names (`AI_Score__c`, `Lead_Tier__c`, `Fit_Level__c`)
+  - **HubSpot** — maps pipeline status to lifecycle stages (`lead`, `opportunity`, `customer`)
+  - **Generic CRM** — adds letter grade (A/B/C/D) and "Next Action" recommendation
+
+### AI Email Generation
+- Generates personalized cold outreach emails per lead
+- Based on company name, industry, location, rating, and enriched contact data
+
+---
 
 ## Tech Stack
 
-| Layer | Technology |
-| --- | --- |
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
-| Backend | Next.js API Routes (Node.js runtime) |
-| Lead Data | Google Places API (New) |
-| Database | SQLite via `better-sqlite3` |
-| Export | PapaParse (CSV) |
-| Hosting | Vercel (serverless) |
+| Layer | Technology | Cost |
+|---|---|---|
+| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS | Free |
+| Backend | Next.js API Routes | Free |
+| Lead Data | OpenStreetMap Overpass API + Nominatim | Free |
+| AI Scoring | Groq API — Llama 3.3 70B | Free (14,400 req/day) |
+| Database | Neon Postgres (via `@vercel/postgres`) | Free tier |
+| Export | PapaParse (CSV) | Free |
+| Hosting | Vercel | Free tier |
+
+---
 
 ## Setup
 
@@ -37,18 +103,27 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Edit `.env.local` and add your keys:
+Edit `.env.local`:
 
 ```env
-GOOGLE_PLACES_API_KEY=your_google_key
-ANTHROPIC_API_KEY=your_anthropic_key
+# Groq API — sign up free at https://console.groq.com
+GROQ_API_KEY=your_groq_api_key
+
+# Neon Postgres — from Vercel Dashboard → Storage → your DB → .env.local tab
+POSTGRES_URL=postgresql://...
+POSTGRES_URL_NON_POOLING=postgresql://...
+POSTGRES_PRISMA_URL=postgresql://...
+POSTGRES_USER=...
+POSTGRES_PASSWORD=...
+POSTGRES_DATABASE=...
+POSTGRES_HOST=...
 ```
 
-**Google Places API:** Enable "Places API (New)" at [Google Cloud Console](https://console.cloud.google.com/)
+**Groq API:** Free tier at [console.groq.com](https://console.groq.com) — supports Llama 3.3 70B with 14,400 requests/day.
 
-**Anthropic API:** Get your key at [console.anthropic.com](https://console.anthropic.com/)
+**Neon Postgres:** Create a free database at [neon.tech](https://neon.tech) or provision via Vercel Storage. The table is created automatically on first run.
 
-### 3. Run
+### 3. Run locally
 
 ```bash
 npm run dev
@@ -56,49 +131,57 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
+---
+
 ## Architecture
 
-```text
+```
 app/
-  page.tsx              # Search page
-  dashboard/page.tsx    # Saved leads dashboard
+  page.tsx                    # Search + discover leads
+  dashboard/page.tsx          # Pipeline dashboard (list + kanban)
   api/
-    search/route.ts     # Google Places search
-    leads/route.ts      # CRUD for saved leads (SQLite)
-    score/route.ts      # AI lead scoring (Claude)
-    email/route.ts      # AI email generation (Claude)
+    search/route.ts           # Overpass API business search
+    leads/route.ts            # CRUD — save, update, delete leads
+    score/route.ts            # AI scoring via Groq Llama 3.3
+    enrich/route.ts           # Email extraction from websites
+    email/route.ts            # AI cold email generation
+    analytics/route.ts        # Pipeline stats + recommendations
+    deduplicate/route.ts      # Duplicate detection + merge
+    export/route.ts           # Multi-format CRM CSV export
+    import/route.ts           # CSV import with column auto-mapping
+
 components/
+  LeadsTable.tsx              # Main lead cards — score, enrich, email, pipeline
+  KanbanBoard.tsx             # Visual pipeline board by status
+  InsightsCard.tsx            # Analytics overview + segmentation
+  ICPBuilder.tsx              # Ideal Customer Profile builder
+  SearchForm.tsx              # Industry + location search form
+  EmailModal.tsx              # AI email generation modal
+  ScoreBadge.tsx              # Score + fit level badge
   Navbar.tsx
-  SearchForm.tsx
-  LeadsTable.tsx        # Main leads display with AI actions
-  EmailModal.tsx        # Email generation modal
-  ScoreBadge.tsx
+
 lib/
-  db.ts                 # SQLite queries
-  types.ts              # TypeScript interfaces
+  db.ts                       # Neon Postgres queries (async, @vercel/postgres)
+  types.ts                    # TypeScript interfaces + constants
 ```
 
-## AI Features
+---
 
-### Lead Scoring
+## Key Design Decisions
 
-Click **Score** on any lead — Claude analyzes the business and returns:
+**Free APIs only** — OpenStreetMap Overpass replaces paid Google Places; Groq replaces paid OpenAI/Anthropic. Total API cost: $0.
 
-- Score (1–10)
-- Fit level (High / Medium / Low)
-- 2-3 sentence reasoning
-- 3 conversation talking points
+**Neon Postgres over SQLite** — Vercel serverless functions have an ephemeral filesystem; SQLite data would be lost on redeploy. Neon provides a persistent, free Postgres instance that works natively with `@vercel/postgres`.
 
-You can optionally describe your Ideal Customer Profile (ICP) to get tailored scores.
+**Quality Score** — Separate from AI score. Measures data completeness (phone, website, email, rating) on a 0–100 scale. Combined with AI score to determine lead tier, giving a more reliable signal than AI score alone.
 
-### Email Generation
+**Email enrichment logic** — Always checks multiple contact pages in parallel, not just the homepage. Filters out platform emails (wixpress.com, squarespace.com, etc.) and ranks results by domain match.
 
-Click **Email** on any lead — Claude writes a personalized cold email based on:
+---
 
-- Business name, industry, location, and Google rating
-- Your name, company, and value proposition
+## Deployment (Vercel)
 
-## Deployment
-
-Deploy to Vercel with one click. Add environment variables in the Vercel dashboard.
-SQLite writes to `leads.db` at the project root — for production, swap `better-sqlite3` for a hosted DB (PlanetScale, Supabase, etc.).
+1. Push to GitHub
+2. Import repo in [vercel.com](https://vercel.com)
+3. Add all environment variables in **Settings → Environment Variables**
+4. Deploy — the database table is created automatically on first API call
