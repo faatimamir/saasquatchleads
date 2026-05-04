@@ -45,3 +45,4 @@ next-env.d.ts
 *.sqlite3
 *.db-shm
 *.db-wal
+*.mp4
