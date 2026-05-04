@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     const primaryEmail = allEmails[0] || '';
 
     if (id && primaryEmail) {
-      updateLeadEnrichment(id, primaryEmail);
+      await updateLeadEnrichment(id, primaryEmail);
     }
 
     return NextResponse.json({ emails: allEmails, phones, primary_email: primaryEmail });

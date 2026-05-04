@@ -20,6 +20,11 @@ export interface SavedLead extends Lead {
   status: 'New' | 'Contacted' | 'Qualified' | 'Closed' | 'Not Interested';
   notes: string;
   enriched_email: string;
+  lead_tier?: 'Hot' | 'Warm' | 'Cold';
+  duplicate_of?: string | null;
+  last_contacted?: string | null;
+  contact_count?: number;
+  quality_score?: number;
 }
 
 export interface SearchParams {

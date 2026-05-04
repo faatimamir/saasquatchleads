@@ -1,59 +1,42 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { sql } from '@vercel/postgres';
 
-const DB_PATH = path.join(process.cwd(), 'leads.db');
-
-let db: Database.Database;
-
-function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS saved_leads (
-        id TEXT PRIMARY KEY,
-        place_id TEXT UNIQUE NOT NULL,
-        company_name TEXT NOT NULL,
-        address TEXT,
-        phone TEXT,
-        website TEXT,
-        industry TEXT,
-        rating REAL,
-        review_count INTEGER,
-        maps_url TEXT,
-        ai_score INTEGER,
-        ai_score_reason TEXT,
-        ai_fit_level TEXT,
-        talking_points TEXT,
-        status TEXT NOT NULL DEFAULT 'New',
-        notes TEXT NOT NULL DEFAULT '',
-        enriched_email TEXT NOT NULL DEFAULT '',
-        saved_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-    `);
-
-    // Migrate existing tables that don't have the new columns
-    const cols = db.prepare("PRAGMA table_info(saved_leads)").all() as { name: string }[];
-    const colNames = cols.map(c => c.name);
-    if (!colNames.includes('status'))
-      db.exec("ALTER TABLE saved_leads ADD COLUMN status TEXT NOT NULL DEFAULT 'New'");
-    if (!colNames.includes('notes'))
-      db.exec("ALTER TABLE saved_leads ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
-    if (!colNames.includes('enriched_email'))
-      db.exec("ALTER TABLE saved_leads ADD COLUMN enriched_email TEXT NOT NULL DEFAULT ''");
-    if (!colNames.includes('talking_points'))
-      db.exec("ALTER TABLE saved_leads ADD COLUMN talking_points TEXT");
-  }
-  return db;
+export async function initDb() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS saved_leads (
+      id TEXT PRIMARY KEY,
+      place_id TEXT UNIQUE NOT NULL,
+      company_name TEXT NOT NULL,
+      address TEXT DEFAULT '',
+      phone TEXT DEFAULT '',
+      website TEXT DEFAULT '',
+      industry TEXT DEFAULT '',
+      rating REAL DEFAULT 0,
+      review_count INTEGER DEFAULT 0,
+      maps_url TEXT DEFAULT '',
+      ai_score INTEGER,
+      ai_score_reason TEXT,
+      ai_fit_level TEXT,
+      talking_points TEXT,
+      status TEXT NOT NULL DEFAULT 'New',
+      notes TEXT NOT NULL DEFAULT '',
+      enriched_email TEXT NOT NULL DEFAULT '',
+      lead_tier TEXT DEFAULT 'Warm',
+      duplicate_of TEXT,
+      last_contacted TEXT,
+      contact_count INTEGER DEFAULT 0,
+      quality_score REAL DEFAULT 0,
+      saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
 }
 
-export function getAllLeads() {
-  return getDb()
-    .prepare('SELECT * FROM saved_leads ORDER BY saved_at DESC')
-    .all();
+export async function getAllLeads() {
+  await initDb();
+  const { rows } = await sql`SELECT * FROM saved_leads ORDER BY saved_at DESC`;
+  return rows;
 }
 
-export function saveLead(lead: {
+export async function saveLead(lead: {
   id: string;
   place_id: string;
   company_name: string;
@@ -65,54 +48,112 @@ export function saveLead(lead: {
   review_count: number;
   maps_url: string;
 }) {
-  return getDb()
-    .prepare(`
-      INSERT OR IGNORE INTO saved_leads
-        (id, place_id, company_name, address, phone, website, industry, rating, review_count, maps_url)
-      VALUES
-        (@id, @place_id, @company_name, @address, @phone, @website, @industry, @rating, @review_count, @maps_url)
-    `)
-    .run(lead);
+  await initDb();
+  await sql`
+    INSERT INTO saved_leads
+      (id, place_id, company_name, address, phone, website, industry, rating, review_count, maps_url)
+    VALUES
+      (${lead.id}, ${lead.place_id}, ${lead.company_name}, ${lead.address},
+       ${lead.phone}, ${lead.website}, ${lead.industry}, ${lead.rating},
+       ${lead.review_count}, ${lead.maps_url})
+    ON CONFLICT (place_id) DO NOTHING
+  `;
 }
 
-export function deleteLead(id: string) {
-  return getDb().prepare('DELETE FROM saved_leads WHERE id = ?').run(id);
+export async function deleteLead(id: string) {
+  await sql`DELETE FROM saved_leads WHERE id = ${id}`;
 }
 
-export function updateLeadScore(
+export async function updateLeadScore(
   id: string,
   score: number,
   reason: string,
   fit_level: string,
   talking_points?: string[]
 ) {
-  return getDb()
-    .prepare(
-      'UPDATE saved_leads SET ai_score = ?, ai_score_reason = ?, ai_fit_level = ?, talking_points = ? WHERE id = ?'
+  await sql`
+    UPDATE saved_leads
+    SET ai_score = ${score},
+        ai_score_reason = ${reason},
+        ai_fit_level = ${fit_level},
+        talking_points = ${JSON.stringify(talking_points ?? [])}
+    WHERE id = ${id}
+  `;
+}
+
+export async function updateLeadStatus(id: string, status: string) {
+  await sql`UPDATE saved_leads SET status = ${status} WHERE id = ${id}`;
+}
+
+export async function updateLeadNotes(id: string, notes: string) {
+  await sql`UPDATE saved_leads SET notes = ${notes} WHERE id = ${id}`;
+}
+
+export async function updateLeadEnrichment(id: string, enriched_email: string) {
+  await sql`UPDATE saved_leads SET enriched_email = ${enriched_email} WHERE id = ${id}`;
+}
+
+export async function updateLeadTier(id: string, tier: 'Hot' | 'Warm' | 'Cold') {
+  await sql`UPDATE saved_leads SET lead_tier = ${tier} WHERE id = ${id}`;
+}
+
+export async function updateQualityScore(id: string, score: number) {
+  await sql`UPDATE saved_leads SET quality_score = ${score} WHERE id = ${id}`;
+}
+
+export async function recordContact(id: string) {
+  await sql`
+    UPDATE saved_leads
+    SET contact_count = contact_count + 1, last_contacted = NOW()
+    WHERE id = ${id}
+  `;
+}
+
+export async function markAsDuplicate(id: string, duplicateOf: string) {
+  await sql`UPDATE saved_leads SET duplicate_of = ${duplicateOf} WHERE id = ${id}`;
+}
+
+export async function getLeadsByTier(tier: 'Hot' | 'Warm' | 'Cold') {
+  const { rows } = await sql`
+    SELECT * FROM saved_leads
+    WHERE lead_tier = ${tier} AND duplicate_of IS NULL
+    ORDER BY ai_score DESC NULLS LAST
+  `;
+  return rows;
+}
+
+export async function getLeadById(id: string) {
+  const { rows } = await sql`SELECT * FROM saved_leads WHERE id = ${id}`;
+  return rows[0] ?? null;
+}
+
+export async function findDuplicates(lead: { company_name: string; website: string; phone: string }) {
+  const { rows } = await sql`
+    SELECT * FROM saved_leads
+    WHERE duplicate_of IS NULL AND (
+      LOWER(company_name) = LOWER(${lead.company_name}) OR
+      (website = ${lead.website} AND website != '') OR
+      (phone = ${lead.phone} AND phone != '')
     )
-    .run(score, reason, fit_level, JSON.stringify(talking_points ?? []), id);
+    LIMIT 5
+  `;
+  return rows;
 }
 
-export function updateLeadStatus(id: string, status: string) {
-  return getDb()
-    .prepare('UPDATE saved_leads SET status = ? WHERE id = ?')
-    .run(status, id);
-}
+export async function getAnalytics() {
+  const [total, byTier, byStatus, avgScore, contacted] = await Promise.all([
+    sql`SELECT COUNT(*) as count FROM saved_leads WHERE duplicate_of IS NULL`,
+    sql`SELECT lead_tier, COUNT(*) as count FROM saved_leads WHERE duplicate_of IS NULL GROUP BY lead_tier`,
+    sql`SELECT status, COUNT(*) as count FROM saved_leads WHERE duplicate_of IS NULL GROUP BY status`,
+    sql`SELECT AVG(ai_score) as avg_score FROM saved_leads WHERE ai_score IS NOT NULL AND duplicate_of IS NULL`,
+    sql`SELECT COUNT(*) as count FROM saved_leads WHERE contact_count > 0 AND duplicate_of IS NULL`,
+  ]);
 
-export function updateLeadNotes(id: string, notes: string) {
-  return getDb()
-    .prepare('UPDATE saved_leads SET notes = ? WHERE id = ?')
-    .run(notes, id);
-}
-
-export function updateLeadEnrichment(id: string, enriched_email: string) {
-  return getDb()
-    .prepare('UPDATE saved_leads SET enriched_email = ? WHERE id = ?')
-    .run(enriched_email, id);
-}
-
-export function getLeadById(id: string) {
-  return getDb()
-    .prepare('SELECT * FROM saved_leads WHERE id = ?')
-    .get(id);
+  return {
+    total: Number(total.rows[0].count),
+    byTier: Object.fromEntries(byTier.rows.map((r) => [r.lead_tier, Number(r.count)])),
+    byStatus: Object.fromEntries(byStatus.rows.map((r) => [r.status, Number(r.count)])),
+    avgScore: avgScore.rows[0].avg_score || 0,
+    contacted: Number(contacted.rows[0].count),
+  };
 }

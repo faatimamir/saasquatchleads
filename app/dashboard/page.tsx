@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Download, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { Download, RefreshCw, LayoutDashboard, FileJson, FileSpreadsheet } from 'lucide-react';
 import { SavedLead, PIPELINE_STATUSES, STATUS_COLORS, PipelineStatus } from '@/lib/types';
 import LeadsTable from '@/components/LeadsTable';
+import InsightsCard from '@/components/InsightsCard';
 import Papa from 'papaparse';
 
 export default function DashboardPage() {
@@ -11,6 +12,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [exporting, setExporting] = useState(false);
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -90,6 +92,27 @@ export default function DashboardPage() {
     URL.revokeObjectURL(url);
   };
 
+  const exportCRM = async (format: 'salesforce' | 'hubspot' | 'crm-generic') => {
+    if (leads.length === 0) return;
+    setExporting(true);
+    try {
+      const res = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format, leadIds: leads.map(l => l.id) }),
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `leads-export-${format}-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const filtered = leads.filter((l) => {
     const matchesText =
       !filter ||
@@ -121,14 +144,34 @@ export default function DashboardPage() {
           </h1>
           <p className="text-gray-400">Track, manage, and export your saved leads</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <button onClick={fetchLeads} className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-medium transition-colors">
             <RefreshCw className="w-4 h-4" />Refresh
           </button>
-          <button onClick={exportCSV} disabled={leads.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors">
-            <Download className="w-4 h-4" />Export CSV
-          </button>
+          <div className="flex gap-2">
+            <button onClick={exportCSV} disabled={leads.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors">
+              <Download className="w-4 h-4" />CSV
+            </button>
+            <div className="relative group">
+              <button disabled={leads.length === 0 || exporting}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors">
+                <FileSpreadsheet className="w-4 h-4" />
+                CRM Export
+              </button>
+              <div className="hidden group-hover:block absolute right-0 mt-2 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-10 min-w-max">
+                <button onClick={() => exportCRM('salesforce')} className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 first:rounded-t-lg">
+                  Salesforce Format
+                </button>
+                <button onClick={() => exportCRM('hubspot')} className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">
+                  HubSpot Format
+                </button>
+                <button onClick={() => exportCRM('crm-generic')} className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 last:rounded-b-lg">
+                  Generic CRM Format
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -159,6 +202,9 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Insights */}
+      <InsightsCard />
 
       {/* Filters */}
       <div className="flex gap-3">

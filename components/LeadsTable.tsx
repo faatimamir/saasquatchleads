@@ -4,7 +4,8 @@ import { useState } from 'react';
 import {
   Star, Phone, Globe, MapPin, Bookmark, BookmarkCheck,
   Sparkles, Mail, Loader2, ChevronDown, ChevronUp,
-  ExternalLink, Zap, ArrowUpDown, Filter, AtSign, RefreshCw
+  ExternalLink, Zap, ArrowUpDown, Filter, AtSign, RefreshCw,
+  TrendingUp, Copy, AlertCircle
 } from 'lucide-react';
 import { Lead, SavedLead, PIPELINE_STATUSES, STATUS_COLORS, PipelineStatus } from '@/lib/types';
 import ScoreBadge from './ScoreBadge';
@@ -52,6 +53,9 @@ export default function LeadsTable({
   const [filterHasPhone, setFilterHasPhone] = useState(false);
   const [filterHasWebsite, setFilterHasWebsite] = useState(false);
   const [filterMinScore, setFilterMinScore] = useState(0);
+  const [filterTier, setFilterTier] = useState<'All' | 'Hot' | 'Warm' | 'Cold'>('All');
+  const [deduplicating, setDeduplicating] = useState<string | null>(null);
+  const [checkingDuplicates, setCheckingDuplicates] = useState<Record<string, boolean>>({});
 
   const scoreLeadWithAI = async (lead: Lead | SavedLead) => {
     setScoringId(lead.id);
@@ -101,6 +105,23 @@ export default function LeadsTable({
     }
   };
 
+  const checkForDuplicates = async (lead: Lead | SavedLead) => {
+    setCheckingDuplicates(prev => ({ ...prev, [lead.id]: true }));
+    try {
+      const res = await fetch('/api/deduplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: lead.id }),
+      });
+      const data = await res.json();
+      if (!data.error && data.duplicates?.length > 0) {
+        setExpandedId(lead.id);
+      }
+    } finally {
+      setCheckingDuplicates(prev => ({ ...prev, [lead.id]: false }));
+    }
+  };
+
   const getScore = (lead: Lead | SavedLead) => {
     if (scores[lead.id]) return scores[lead.id];
     if ('ai_score' in lead && lead.ai_score) {
@@ -129,6 +150,10 @@ export default function LeadsTable({
     if (filterMinScore > 0) {
       const s = getScore(l);
       if (!s || s.score < filterMinScore) return false;
+    }
+    if (filterTier !== 'All') {
+      const tier = 'lead_tier' in l ? (l as SavedLead).lead_tier : undefined;
+      if (tier !== filterTier) return false;
     }
     return true;
   });
@@ -176,6 +201,16 @@ export default function LeadsTable({
             <option value={8}>Score ≥ 8</option>
             <option value={9}>Score ≥ 9</option>
           </select>
+          <select
+            value={filterTier}
+            onChange={(e) => setFilterTier(e.target.value as 'All' | 'Hot' | 'Warm' | 'Cold')}
+            className="bg-gray-800 text-gray-300 rounded-md px-2 py-1 text-xs border border-gray-700 focus:outline-none"
+          >
+            <option value="All">All Tiers</option>
+            <option value="Hot">🔥 Hot Leads</option>
+            <option value="Warm">🌡️ Warm Leads</option>
+            <option value="Cold">❄️ Cold Leads</option>
+          </select>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-gray-400 ml-auto">
@@ -219,9 +254,24 @@ export default function LeadsTable({
               <div className="p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-white font-semibold truncate">{lead.company_name}</h3>
                       {score && <ScoreBadge score={score.score} fitLevel={score.fit_level} size="sm" />}
+                      {score?.quality_score !== undefined && (
+                        <div className="flex items-center gap-1 px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded-full text-xs font-medium">
+                          <TrendingUp className="w-3 h-3" />
+                          Quality: {score.quality_score.toFixed(0)}
+                        </div>
+                      )}
+                      {score?.tier && (
+                        <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          score.tier === 'Hot' ? 'bg-red-500/20 text-red-400' :
+                          score.tier === 'Warm' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-blue-500/20 text-blue-400'
+                        }`}>
+                          {score.tier === 'Hot' ? '🔥' : score.tier === 'Warm' ? '🌡️' : '❄️'} {score.tier}
+                        </div>
+                      )}
                       {showPipelineControls && savedLead.status && (
                         <select
                           value={savedLead.status}
@@ -290,6 +340,14 @@ export default function LeadsTable({
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
                         {enrichingId === lead.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <AtSign className="w-3 h-3" />}
                         Enrich
+                      </button>
+                    )}
+
+                    {showPipelineControls && (
+                      <button onClick={() => checkForDuplicates(lead)} disabled={checkingDuplicates[lead.id]}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
+                        {checkingDuplicates[lead.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
+                        Check Duplicates
                       </button>
                     )}
 
