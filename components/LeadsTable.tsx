@@ -288,7 +288,7 @@ export default function LeadsTable({
                           score.tier === 'Warm' ? 'bg-yellow-500/20 text-yellow-400' :
                           'bg-blue-500/20 text-blue-400'
                         }`}>
-                          {score.tier === 'Hot' ? '🔥' : score.tier === 'Warm' ? '🌡️' : '❄️'} {score.tier}
+                          {score.tier === 'Hot' ? '' : score.tier === 'Warm' ? '' : '❄️'} {score.tier}
                         </div>
                       )}
                       {showPipelineControls && savedLead.status && (
