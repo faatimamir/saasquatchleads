@@ -42,6 +42,7 @@ export default function LeadsTable({
 }: LeadsTableProps) {
   const [scoringId, setScoringId] = useState<string | null>(null);
   const [scoringAll, setScoringAll] = useState(false);
+  const [enrichingAll, setEnrichingAll] = useState(false);
   const [scores, setScores] = useState<Record<string, any>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [emailLead, setEmailLead] = useState<Lead | SavedLead | null>(null);
@@ -84,6 +85,16 @@ export default function LeadsTable({
       }
     }
     setScoringAll(false);
+  };
+
+  const enrichAll = async () => {
+    setEnrichingAll(true);
+    for (const lead of visibleLeads) {
+      if (lead.website && !getEnriched(lead)) {
+        await enrichLead(lead);
+      }
+    }
+    setEnrichingAll(false);
   };
 
   const enrichLead = async (lead: Lead | SavedLead) => {
@@ -207,9 +218,9 @@ export default function LeadsTable({
             className="bg-gray-800 text-gray-300 rounded-md px-2 py-1 text-xs border border-gray-700 focus:outline-none"
           >
             <option value="All">All Tiers</option>
-            <option value="Hot">🔥 Hot Leads</option>
-            <option value="Warm">🌡️ Warm Leads</option>
-            <option value="Cold">❄️ Cold Leads</option>
+            <option value="Hot">Hot Leads</option>
+            <option value="Warm">Warm Leads</option>
+            <option value="Cold">Cold Leads</option>
           </select>
         </div>
 
@@ -228,11 +239,19 @@ export default function LeadsTable({
 
         <button
           onClick={scoreAll}
-          disabled={scoringAll}
+          disabled={scoringAll || enrichingAll}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
         >
           {scoringAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
           Score All
+        </button>
+        <button
+          onClick={enrichAll}
+          disabled={enrichingAll || scoringAll}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+        >
+          {enrichingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <AtSign className="w-3 h-3" />}
+          Enrich All
         </button>
       </div>
 

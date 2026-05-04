@@ -92,7 +92,7 @@ export default function InsightsCard() {
         <div className="space-y-3 text-xs">
           <div>
             <div className="flex justify-between mb-1">
-              <span className="text-gray-400">🔥 Hot Leads</span>
+              <span className="text-gray-400">Hot Leads</span>
               <span className="text-red-400 font-medium">{segmentation.hot.count} ({segmentation.hot.percentage})</span>
             </div>
             <div className="w-full bg-gray-800 rounded-full h-1.5">
@@ -101,7 +101,7 @@ export default function InsightsCard() {
           </div>
           <div>
             <div className="flex justify-between mb-1">
-              <span className="text-gray-400">🌡️ Warm Leads</span>
+              <span className="text-gray-400">Warm Leads</span>
               <span className="text-yellow-400 font-medium">{segmentation.warm.count} ({segmentation.warm.percentage})</span>
             </div>
             <div className="w-full bg-gray-800 rounded-full h-1.5">
@@ -110,7 +110,7 @@ export default function InsightsCard() {
           </div>
           <div>
             <div className="flex justify-between mb-1">
-              <span className="text-gray-400">❄️ Cold Leads</span>
+              <span className="text-gray-400">Cold Leads</span>
               <span className="text-blue-400 font-medium">{segmentation.cold.count} ({segmentation.cold.percentage})</span>
             </div>
             <div className="w-full bg-gray-800 rounded-full h-1.5">

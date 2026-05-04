@@ -16,7 +16,6 @@ A full-stack lead generation tool built for the Caprae Capital interview challen
 | --- | --- |
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
 | Backend | Next.js API Routes (Node.js runtime) |
-| AI | Anthropic Claude (`claude-haiku-4-5`) |
 | Lead Data | Google Places API (New) |
 | Database | SQLite via `better-sqlite3` |
 | Export | PapaParse (CSV) |

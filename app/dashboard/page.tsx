@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Download, RefreshCw, LayoutDashboard, FileJson, FileSpreadsheet } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Download, RefreshCw, LayoutDashboard, FileSpreadsheet, Kanban, List, Upload, ChevronDown } from 'lucide-react';
 import { SavedLead, PIPELINE_STATUSES, STATUS_COLORS, PipelineStatus } from '@/lib/types';
 import LeadsTable from '@/components/LeadsTable';
+import KanbanBoard from '@/components/KanbanBoard';
 import InsightsCard from '@/components/InsightsCard';
 import Papa from 'papaparse';
 
@@ -12,7 +13,16 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [industryFilter, setIndustryFilter] = useState<string>('All');
+  const [tierFilter, setTierFilter] = useState<string>('All');
+  const [hasEmailFilter, setHasEmailFilter] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [crmDropdownOpen, setCrmDropdownOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const crmDropdownRef = useRef<HTMLDivElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -26,6 +36,16 @@ export default function DashboardPage() {
   };
 
   useEffect(() => { fetchLeads(); }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (crmDropdownRef.current && !crmDropdownRef.current.contains(e.target as Node)) {
+        setCrmDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleDelete = async (id: string) => {
     await fetch('/api/leads', {
@@ -60,6 +80,28 @@ export default function DashboardPage() {
         l.id === id ? { ...l, ai_score: score, ai_fit_level: fitLevel, ai_score_reason: reason } : l
       )
     );
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/import', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.error) {
+        setImportResult(`Error: ${data.error}`);
+      } else {
+        setImportResult(`Imported ${data.imported} leads successfully`);
+        fetchLeads();
+      }
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
   };
 
   const exportCSV = () => {
@@ -113,6 +155,8 @@ export default function DashboardPage() {
     }
   };
 
+  const industries = ['All', ...Array.from(new Set(leads.map((l) => l.industry).filter(Boolean))).sort()];
+
   const filtered = leads.filter((l) => {
     const matchesText =
       !filter ||
@@ -120,7 +164,10 @@ export default function DashboardPage() {
       l.industry.toLowerCase().includes(filter.toLowerCase()) ||
       l.address.toLowerCase().includes(filter.toLowerCase());
     const matchesStatus = statusFilter === 'All' || l.status === statusFilter;
-    return matchesText && matchesStatus;
+    const matchesIndustry = industryFilter === 'All' || l.industry === industryFilter;
+    const matchesTier = tierFilter === 'All' || l.lead_tier === tierFilter;
+    const matchesEmail = !hasEmailFilter || !!l.enriched_email;
+    return matchesText && matchesStatus && matchesIndustry && matchesTier && matchesEmail;
   });
 
   const scored = leads.filter((l) => l.ai_score != null);
@@ -144,33 +191,54 @@ export default function DashboardPage() {
           </h1>
           <p className="text-gray-400">Track, manage, and export your saved leads</p>
         </div>
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          {/* View toggle */}
+          <div className="flex items-center bg-gray-800 rounded-lg p-1 gap-1">
+            <button onClick={() => setViewMode('list')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'list' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+              <List className="w-4 h-4" />List
+            </button>
+            <button onClick={() => setViewMode('kanban')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'kanban' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+              <Kanban className="w-4 h-4" />Kanban
+            </button>
+          </div>
+
           <button onClick={fetchLeads} className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-medium transition-colors">
             <RefreshCw className="w-4 h-4" />Refresh
           </button>
-          <div className="flex gap-2">
-            <button onClick={exportCSV} disabled={leads.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors">
-              <Download className="w-4 h-4" />CSV
+
+          {/* Import */}
+          <input ref={importInputRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
+          <button onClick={() => importInputRef.current?.click()} disabled={importing}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-300 rounded-lg text-sm font-medium transition-colors">
+            <Upload className="w-4 h-4" />{importing ? 'Importing...' : 'Import CSV'}
+          </button>
+
+          <button onClick={exportCSV} disabled={leads.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors">
+            <Download className="w-4 h-4" />CSV
+          </button>
+
+          {/* CRM Export — click-based dropdown */}
+          <div className="relative" ref={crmDropdownRef}>
+            <button
+              onClick={() => setCrmDropdownOpen(!crmDropdownOpen)}
+              disabled={leads.length === 0 || exporting}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors">
+              <FileSpreadsheet className="w-4 h-4" />CRM Export<ChevronDown className="w-3.5 h-3.5" />
             </button>
-            <div className="relative group">
-              <button disabled={leads.length === 0 || exporting}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors">
-                <FileSpreadsheet className="w-4 h-4" />
-                CRM Export
-              </button>
-              <div className="hidden group-hover:block absolute right-0 mt-2 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-10 min-w-max">
-                <button onClick={() => exportCRM('salesforce')} className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 first:rounded-t-lg">
+            {crmDropdownOpen && (
+              <div className="absolute right-0 mt-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-20 min-w-max">
+                <button onClick={() => { exportCRM('salesforce'); setCrmDropdownOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-t-lg">
                   Salesforce Format
                 </button>
-                <button onClick={() => exportCRM('hubspot')} className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">
+                <button onClick={() => { exportCRM('hubspot'); setCrmDropdownOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700">
                   HubSpot Format
                 </button>
-                <button onClick={() => exportCRM('crm-generic')} className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 last:rounded-b-lg">
+                <button onClick={() => { exportCRM('crm-generic'); setCrmDropdownOpen(false); }} className="block w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-b-lg">
                   Generic CRM Format
                 </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -203,24 +271,64 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* Import result toast */}
+      {importResult && (
+        <div className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${importResult.startsWith('Error') ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+          {importResult}
+          <button onClick={() => setImportResult(null)} className="ml-4 opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+
       {/* Insights */}
       <InsightsCard />
 
       {/* Filters */}
-      <div className="flex gap-3">
-        <input
-          type="text"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter by company, industry, or location..."
-          className="flex-1 bg-gray-900 border border-gray-800 text-white placeholder-gray-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-        {statusFilter !== 'All' && (
-          <button onClick={() => setStatusFilter('All')}
-            className="px-3 py-2.5 bg-gray-800 text-gray-400 hover:text-white rounded-lg text-sm transition-colors">
-            Clear filter
+      <div className="space-y-2">
+        <div className="flex gap-3">
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by company, industry, or location..."
+            className="flex-1 bg-gray-900 border border-gray-800 text-white placeholder-gray-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <select
+            value={industryFilter}
+            onChange={(e) => setIndustryFilter(e.target.value)}
+            className="bg-gray-900 border border-gray-800 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            {industries.map((ind) => (
+              <option key={ind} value={ind} className="bg-gray-900">{ind === 'All' ? 'All Industries' : ind}</option>
+            ))}
+          </select>
+          <select
+            value={tierFilter}
+            onChange={(e) => setTierFilter(e.target.value)}
+            className="bg-gray-900 border border-gray-800 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="All">All Tiers</option>
+            <option value="Hot">🔥 Hot</option>
+            <option value="Warm">🌡️ Warm</option>
+            <option value="Cold">❄️ Cold</option>
+          </select>
+          <button
+            onClick={() => setHasEmailFilter(!hasEmailFilter)}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${hasEmailFilter ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}
+          >
+            @ Has Email
           </button>
-        )}
+          {(statusFilter !== 'All' || industryFilter !== 'All' || tierFilter !== 'All' || hasEmailFilter || filter) && (
+            <button
+              onClick={() => { setStatusFilter('All'); setIndustryFilter('All'); setTierFilter('All'); setHasEmailFilter(false); setFilter(''); }}
+              className="px-3 py-2 bg-gray-800 text-gray-400 hover:text-white rounded-lg text-sm transition-colors"
+            >
+              Clear all
+            </button>
+          )}
+          <span className="text-xs text-gray-500 ml-auto">{filtered.length} of {leads.length} leads</span>
+        </div>
       </div>
 
       {loading ? (
@@ -228,8 +336,14 @@ export default function DashboardPage() {
       ) : leads.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <p className="text-gray-500 text-lg">No saved leads yet</p>
-          <p className="text-gray-600 text-sm">Search for leads and click &quot;Save&quot; to add them here</p>
+          <p className="text-gray-600 text-sm">Search for leads and click &quot;Save&quot; to add them here, or import a CSV above</p>
         </div>
+      ) : viewMode === 'kanban' ? (
+        <KanbanBoard
+          leads={filtered}
+          onStatusChange={handleStatusChange}
+          onDelete={handleDelete}
+        />
       ) : (
         <LeadsTable
           leads={filtered}
