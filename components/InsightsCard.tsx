@@ -11,6 +11,7 @@ interface Analytics {
     contactRate: string;
     contacted: number;
   };
+  
   segmentation: {
     hot: { count: number; percentage: string; avgScore: string };
     warm: { count: number; percentage: string; avgScore: string };
