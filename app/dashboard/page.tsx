@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [industryFilter, setIndustryFilter] = useState<string>('All');
   const [tierFilter, setTierFilter] = useState<string>('All');
+  const [regionFilter, setRegionFilter] = useState<string>('All');
   const [hasEmailFilter, setHasEmailFilter] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [crmDropdownOpen, setCrmDropdownOpen] = useState(false);
@@ -95,7 +96,8 @@ export default function DashboardPage() {
       if (data.error) {
         setImportResult(`Error: ${data.error}`);
       } else {
-        setImportResult(`Imported ${data.imported} leads successfully`);
+        const skippedMsg = data.skipped > 0 ? `, ${data.skipped} skipped (duplicates)` : '';
+        setImportResult(`Imported ${data.imported} leads${skippedMsg}`);
         fetchLeads();
       }
     } finally {
@@ -156,6 +158,7 @@ export default function DashboardPage() {
   };
 
   const industries = ['All', ...Array.from(new Set(leads.map((l) => l.industry).filter(Boolean))).sort()];
+  const regions = ['All', ...Array.from(new Set(leads.map((l) => l.search_location).filter(Boolean))).sort() as string[]];
 
   const filtered = leads.filter((l) => {
     const matchesText =
@@ -166,8 +169,9 @@ export default function DashboardPage() {
     const matchesStatus = statusFilter === 'All' || l.status === statusFilter;
     const matchesIndustry = industryFilter === 'All' || l.industry === industryFilter;
     const matchesTier = tierFilter === 'All' || l.lead_tier === tierFilter;
+    const matchesRegion = regionFilter === 'All' || l.search_location === regionFilter;
     const matchesEmail = !hasEmailFilter || !!l.enriched_email;
-    return matchesText && matchesStatus && matchesIndustry && matchesTier && matchesEmail;
+    return matchesText && matchesStatus && matchesIndustry && matchesTier && matchesRegion && matchesEmail;
   });
 
   const scored = leads.filter((l) => l.ai_score != null);
@@ -313,15 +317,24 @@ export default function DashboardPage() {
             <option value="Warm">Warm</option>
             <option value="Cold">Cold</option>
           </select>
+          <select
+            value={regionFilter}
+            onChange={(e) => setRegionFilter(e.target.value)}
+            className="bg-gray-900 border border-gray-800 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            {regions.map((r) => (
+              <option key={r} value={r} className="bg-gray-900">{r === 'All' ? 'All Regions' : r}</option>
+            ))}
+          </select>
           {/* <button
             onClick={() => setHasEmailFilter(!hasEmailFilter)}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${hasEmailFilter ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}
           >
             @ Has Email
           </button> */}
-          {(statusFilter !== 'All' || industryFilter !== 'All' || tierFilter !== 'All' || hasEmailFilter || filter) && (
+          {(statusFilter !== 'All' || industryFilter !== 'All' || tierFilter !== 'All' || regionFilter !== 'All' || hasEmailFilter || filter) && (
             <button
-              onClick={() => { setStatusFilter('All'); setIndustryFilter('All'); setTierFilter('All'); setHasEmailFilter(false); setFilter(''); }}
+              onClick={() => { setStatusFilter('All'); setIndustryFilter('All'); setTierFilter('All'); setRegionFilter('All'); setHasEmailFilter(false); setFilter(''); }}
               className="px-3 py-2 bg-gray-800 text-gray-400 hover:text-white rounded-lg text-sm transition-colors"
             >
               Clear all

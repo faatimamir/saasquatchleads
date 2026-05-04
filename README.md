@@ -167,6 +167,38 @@ lib/
 
 ---
 
+## Lead Tier Segmentation
+
+Every scored lead is classified into one of three tiers based on a weighted combination of AI score and Quality Score:
+
+```text
+Combined Score = (AI Score × 0.7) + (Quality Score / 10 × 0.3)
+
+Hot   → Combined Score >= 7.5
+Warm  → Combined Score >= 5.0
+Cold  → Combined Score < 5.0
+```
+
+**AI Score** (1–10) — assigned by Groq Llama 3.3 based on business fundamentals, industry fit, and engagement potential.
+
+**Quality Score** (0–100) — calculated from data completeness:
+
+| Signal | Points |
+| --- | --- |
+| Has phone | 15 |
+| Has website | 15 |
+| Has enriched email | 15 |
+| Has industry | 10 |
+| Has address | 5 |
+| Rating >= 4.5 | 10 |
+| Review count > 20 | 10 |
+| Own domain website (not Facebook/LinkedIn) | 10 |
+| Phone length > 8 digits | 10 |
+
+A lead needs both a high AI score and good data quality to become Hot. A lead scored 9/10 by AI but with no phone, website, or email will still be Warm due to low Quality Score.
+
+---
+
 ## Key Design Decisions
 
 **Free APIs only** — OpenStreetMap Overpass replaces paid Google Places; Groq replaces paid OpenAI/Anthropic. Total API cost: $0.

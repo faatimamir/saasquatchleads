@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllLeads, saveLead, deleteLead, updateLeadStatus, updateLeadNotes } from '@/lib/db';
+import { getAllLeads, saveLead, deleteLead, updateLeadStatus, updateLeadNotes, findDuplicates } from '@/lib/db';
 
 export async function GET() {
   try {
@@ -13,8 +13,18 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const lead = await req.json();
+    // Check for duplicates by website, phone, or name before saving
+    const dupes = await findDuplicates({
+      company_name: lead.company_name,
+      website: lead.website || '',
+      phone: lead.phone || '',
+    });
+    const isDuplicate = dupes.some((d: any) => d.id !== lead.id);
+    if (isDuplicate) {
+      return NextResponse.json({ success: true, isDuplicate: true });
+    }
     await saveLead(lead);
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, isDuplicate: false });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

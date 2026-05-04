@@ -25,9 +25,12 @@ export async function initDb() {
       last_contacted TEXT,
       contact_count INTEGER DEFAULT 0,
       quality_score REAL DEFAULT 0,
+      search_location TEXT DEFAULT '',
       saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  // Add column to existing tables that predate this field
+  await sql`ALTER TABLE saved_leads ADD COLUMN IF NOT EXISTS search_location TEXT DEFAULT ''`;
 }
 
 export async function getAllLeads() {
@@ -47,15 +50,16 @@ export async function saveLead(lead: {
   rating: number;
   review_count: number;
   maps_url: string;
+  search_location?: string;
 }) {
   await initDb();
   await sql`
     INSERT INTO saved_leads
-      (id, place_id, company_name, address, phone, website, industry, rating, review_count, maps_url)
+      (id, place_id, company_name, address, phone, website, industry, rating, review_count, maps_url, search_location)
     VALUES
       (${lead.id}, ${lead.place_id}, ${lead.company_name}, ${lead.address},
        ${lead.phone}, ${lead.website}, ${lead.industry}, ${lead.rating},
-       ${lead.review_count}, ${lead.maps_url})
+       ${lead.review_count}, ${lead.maps_url}, ${lead.search_location || ''})
     ON CONFLICT (place_id) DO NOTHING
   `;
 }
@@ -146,7 +150,7 @@ export async function getAnalytics() {
     sql`SELECT lead_tier, COUNT(*) as count FROM saved_leads WHERE duplicate_of IS NULL GROUP BY lead_tier`,
     sql`SELECT status, COUNT(*) as count FROM saved_leads WHERE duplicate_of IS NULL GROUP BY status`,
     sql`SELECT AVG(ai_score) as avg_score FROM saved_leads WHERE ai_score IS NOT NULL AND duplicate_of IS NULL`,
-    sql`SELECT COUNT(*) as count FROM saved_leads WHERE contact_count > 0 AND duplicate_of IS NULL`,
+    sql`SELECT COUNT(*) as count FROM saved_leads WHERE status = 'Contacted' AND duplicate_of IS NULL`,
   ]);
 
   return {

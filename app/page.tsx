@@ -14,12 +14,16 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [lastQuery, setLastQuery] = useState('');
+  const [currentLocation, setCurrentLocation] = useState('');
   const [icpCriteria, setIcpCriteria] = useState('');
+  const [saveStats, setSaveStats] = useState({ saved: 0, duplicates: 0 });
 
   const handleSearch = async (query: string, location: string, maxResults: number) => {
     setLoading(true);
     setError('');
     setLeads([]);
+    setSaveStats({ saved: 0, duplicates: 0 });
+    setCurrentLocation(location);
     setLastQuery(`${query} in ${location}`);
     try {
       const res = await fetch('/api/search', {
@@ -39,12 +43,18 @@ export default function HomePage() {
 
   const handleSave = async (lead: Lead) => {
     try {
-      await fetch('/api/leads', {
+      const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(lead),
+        body: JSON.stringify({ ...lead, search_location: currentLocation }),
       });
-      setSavedIds((prev) => new Set([...prev, lead.place_id]));
+      const data = await res.json();
+      if (data.isDuplicate) {
+        setSaveStats((prev) => ({ ...prev, duplicates: prev.duplicates + 1 }));
+      } else {
+        setSavedIds((prev) => new Set([...prev, lead.place_id]));
+        setSaveStats((prev) => ({ ...prev, saved: prev.saved + 1 }));
+      }
     } catch { /* silent */ }
   };
 
@@ -112,6 +122,18 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+
+          {(saveStats.saved > 0 || saveStats.duplicates > 0) && (
+            <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-900 border border-gray-800 rounded-lg text-sm">
+              {saveStats.saved > 0 && (
+                <span className="text-emerald-400 font-medium">{saveStats.saved} new lead{saveStats.saved !== 1 ? 's' : ''} saved</span>
+              )}
+              {saveStats.saved > 0 && saveStats.duplicates > 0 && <span className="text-gray-600">·</span>}
+              {saveStats.duplicates > 0 && (
+                <span className="text-gray-400">{saveStats.duplicates} skipped — already in your pipeline</span>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">

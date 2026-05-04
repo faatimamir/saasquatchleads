@@ -5,7 +5,7 @@ import {
   Star, Phone, Globe, MapPin, Bookmark, BookmarkCheck,
   Sparkles, Mail, Loader2, ChevronDown, ChevronUp,
   ExternalLink, Zap, ArrowUpDown, Filter, AtSign, RefreshCw,
-  TrendingUp, Copy, AlertCircle
+  TrendingUp, AlertCircle
 } from 'lucide-react';
 import { Lead, SavedLead, PIPELINE_STATUSES, STATUS_COLORS, PipelineStatus } from '@/lib/types';
 import ScoreBadge from './ScoreBadge';
@@ -55,8 +55,6 @@ export default function LeadsTable({
   const [filterHasWebsite, setFilterHasWebsite] = useState(false);
   const [filterMinScore, setFilterMinScore] = useState(0);
   const [filterTier, setFilterTier] = useState<'All' | 'Hot' | 'Warm' | 'Cold'>('All');
-  const [deduplicating, setDeduplicating] = useState<string | null>(null);
-  const [checkingDuplicates, setCheckingDuplicates] = useState<Record<string, boolean>>({});
 
   const scoreLeadWithAI = async (lead: Lead | SavedLead) => {
     setScoringId(lead.id);
@@ -116,22 +114,6 @@ export default function LeadsTable({
     }
   };
 
-  const checkForDuplicates = async (lead: Lead | SavedLead) => {
-    setCheckingDuplicates(prev => ({ ...prev, [lead.id]: true }));
-    try {
-      const res = await fetch('/api/deduplicate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId: lead.id }),
-      });
-      const data = await res.json();
-      if (!data.error && data.duplicates?.length > 0) {
-        setExpandedId(lead.id);
-      }
-    } finally {
-      setCheckingDuplicates(prev => ({ ...prev, [lead.id]: false }));
-    }
-  };
 
   const getScore = (lead: Lead | SavedLead) => {
     if (scores[lead.id]) return scores[lead.id];
@@ -288,7 +270,7 @@ export default function LeadsTable({
                           score.tier === 'Warm' ? 'bg-yellow-500/20 text-yellow-400' :
                           'bg-blue-500/20 text-blue-400'
                         }`}>
-                          {score.tier === 'Hot' ? '' : score.tier === 'Warm' ? '' : '❄️'} {score.tier}
+                          {score.tier}
                         </div>
                       )}
                       {showPipelineControls && savedLead.status && (
@@ -359,14 +341,6 @@ export default function LeadsTable({
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
                         {enrichingId === lead.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <AtSign className="w-3 h-3" />}
                         Enrich
-                      </button>
-                    )}
-
-                    {showPipelineControls && (
-                      <button onClick={() => checkForDuplicates(lead)} disabled={checkingDuplicates[lead.id]}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
-                        {checkingDuplicates[lead.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
-                        Check Duplicates
                       </button>
                     )}
 

@@ -21,6 +21,7 @@ export interface SavedLead extends Lead {
   notes: string;
   enriched_email: string;
   lead_tier?: 'Hot' | 'Warm' | 'Cold';
+  search_location?: string;
   duplicate_of?: string | null;
   last_contacted?: string | null;
   contact_count?: number;
