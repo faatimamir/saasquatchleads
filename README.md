@@ -51,7 +51,7 @@ Dashboard-level:
 - Text search (company, industry, location)
 - Industry dropdown (auto-populated from your leads)
 - Lead tier (Hot / Warm / Cold)
-- Has Email toggle
+
 
 LeadsTable toolbar:
 - Has Phone / Has Website toggles

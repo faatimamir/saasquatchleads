@@ -86,7 +86,7 @@ export default function KanbanBoard({ leads, onStatusChange, onDelete }: KanbanB
                         lead.lead_tier === 'Warm' ? 'bg-yellow-500/20 text-yellow-400' :
                         'bg-blue-500/20 text-blue-400'
                       }`}>
-                        {lead.lead_tier === 'Hot' ? '🔥' : lead.lead_tier === 'Warm' ? '🌡️' : '❄️'} {lead.lead_tier}
+                        {lead.lead_tier === 'Hot' ? '' : lead.lead_tier === 'Warm' ? '🌡️' : '❄️'} {lead.lead_tier}
                       </div>
                     )}
 

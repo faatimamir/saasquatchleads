@@ -309,16 +309,16 @@ export default function DashboardPage() {
             className="bg-gray-900 border border-gray-800 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             <option value="All">All Tiers</option>
-            <option value="Hot">🔥 Hot</option>
-            <option value="Warm">🌡️ Warm</option>
-            <option value="Cold">❄️ Cold</option>
+            <option value="Hot">Hot</option>
+            <option value="Warm">Warm</option>
+            <option value="Cold">Cold</option>
           </select>
-          <button
+          {/* <button
             onClick={() => setHasEmailFilter(!hasEmailFilter)}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${hasEmailFilter ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}
           >
             @ Has Email
-          </button>
+          </button> */}
           {(statusFilter !== 'All' || industryFilter !== 'All' || tierFilter !== 'All' || hasEmailFilter || filter) && (
             <button
               onClick={() => { setStatusFilter('All'); setIndustryFilter('All'); setTierFilter('All'); setHasEmailFilter(false); setFilter(''); }}
